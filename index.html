@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>極座標変換とヤコビアン（スライダー版）</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<style>
+:root{
+  --bg:#ffffff; --text:#1f1f1e; --text2:#5f5e5a; --card:#f4f3ee; --grid:#b4b2a9;
+  --font:"Hiragino Sans","Yu Gothic","Meiryo",system-ui,-apple-system,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#1f1f1e; --text:#f1efe8; --text2:#b4b2a9; --card:#2c2c2a; --grid:#5f5e5a; }
+}
+body{margin:0;padding:16px;background:var(--bg);color:var(--text);font-family:var(--font);line-height:1.6}
+main{max-width:720px;margin:0 auto}
+h1{font-size:20px;font-weight:500;margin:0 0 4px}
+p.lead{margin:0 0 12px;color:var(--text2);font-size:14px}
+.wrap{position:relative}
+.lb{position:absolute;font-size:13px;color:var(--text2);white-space:nowrap;pointer-events:none}
+.ctl{display:flex;align-items:center;gap:10px;margin:6px 0}
+.ctl .nm{min-width:70px;font-size:14px}
+.ctl input[type=range]{flex:1}
+.ctl output{min-width:52px;text-align:right;font-size:14px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-top:14px}
+.card{background:var(--card);border-radius:8px;padding:12px}
+.card .k{font-size:13px;color:var(--text2)}
+.card .v{font-size:20px;font-weight:500}
+.note{font-size:14px;color:var(--text2);margin-top:12px}
+</style>
+</head>
+<body>
+<main>
+<h1>極座標変換とヤコビアン</h1>
+<p class="lead">x = u cos v，y = u sin v のとき，uv 平面の小長方形 δ が xy 平面の δ′ に移ります．スライダーで位置と大きさを動かして，δ′ と接ベクトルの作る平行四辺形（破線）を比べてみましょう．</p>
+
+<div class="wrap" id="wrap">
+<svg id="s" width="100%" viewBox="0 0 680 340" role="img" aria-label="uv平面の小長方形とxy平面の像δ′および接ベクトルの作る平行四辺形">
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+<g id="stat"></g><g id="dyn"></g>
+</svg>
+</div>
+
+<div style="margin-top:10px">
+<div class="ctl"><span class="nm" id="n1"></span><input type="range" id="U0" min="0.5" max="2.9" step="0.05" value="1.5"><output id="o1"></output></div>
+<div class="ctl"><span class="nm" id="n2"></span><input type="range" id="V0" min="0" max="1.5" step="0.05" value="0.4"><output id="o2"></output></div>
+<div class="ctl"><span class="nm" id="n3"></span><input type="range" id="DU" min="0.02" max="1.5" step="0.02" value="0.5"><output id="o3"></output></div>
+<div class="ctl"><span class="nm" id="n4"></span><input type="range" id="DV" min="0.02" max="1.2" step="0.02" value="0.4"><output id="o4"></output></div>
+</div>
+
+<div class="cards">
+<div class="card"><div class="k" id="k1"></div><div class="v" id="c1"></div></div>
+<div class="card"><div class="k" id="k2"></div><div class="v" id="c2"></div></div>
+<div class="card"><div class="k" id="k3"></div><div class="v" id="c3"></div></div>
+</div>
+<div class="note" id="fm"></div>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script>
+const NS='http://www.w3.org/2000/svg',W=680,H=340,HP=Math.PI/2;
+const wrap=document.getElementById('wrap'),stat=document.getElementById('stat'),dyn=document.getElementById('dyn');
+const K=s=>window.katex?katex.renderToString(s,{throwOnError:false}):s;
+function el(p,n,a){const e=document.createElementNS(NS,n);for(const k in a)e.setAttribute(k,a[k]);p.appendChild(e);return e;}
+const SU=(u,v)=>[50+80*u,290-120*v];
+const SX=(x,y)=>[390+80*x,290-80*y];
+const P=(u,v)=>[u*Math.cos(v),u*Math.sin(v)];
+const pl=a=>a.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ');
+const labels={};
+function lab(id,html,x,y,tf){let d=labels[id];if(!d){d=document.createElement('div');d.className='lb';d.innerHTML=html;wrap.appendChild(d);labels[id]=d;}d.style.left=(x/W*100)+'%';d.style.top=(y/H*100)+'%';d.style.transform=tf||'translate(-50%,-50%)';}
+const gu={stroke:'#7F77DD','stroke-width':1,fill:'none',opacity:0.45};
+const gx={stroke:'#1D9E75','stroke-width':1,fill:'none',opacity:0.5};
+for(let i=0;i<=6;i++){const u=i*0.5;el(stat,'line',{...gu,x1:SU(u,0)[0],y1:SU(u,0)[1],x2:SU(u,HP)[0],y2:SU(u,HP)[1]});}
+for(let k=0;k<=6;k++){const v=k*Math.PI/12;el(stat,'line',{...gu,x1:SU(0,v)[0],y1:SU(0,v)[1],x2:SU(3,v)[0],y2:SU(3,v)[1]});
+  el(stat,'line',{...gx,x1:SX(0,0)[0],y1:SX(0,0)[1],x2:SX(...P(3,v))[0],y2:SX(...P(3,v))[1]});}
+for(let i=1;i<=6;i++){const r=i*0.5,a=[];for(let j=0;j<=40;j++)a.push(SX(...P(r,HP*j/40)));el(stat,'polyline',{...gx,points:pl(a)});}
+const ax={stroke:'var(--text2)','stroke-width':1,'marker-end':'url(#arrow)'};
+el(stat,'line',{...ax,x1:50,y1:290,x2:302,y2:290});
+el(stat,'line',{...ax,x1:50,y1:290,x2:50,y2:90});
+el(stat,'line',{...ax,x1:390,y1:290,x2:642,y2:290});
+el(stat,'line',{...ax,x1:390,y1:290,x2:390,y2:42});
+el(stat,'line',{x1:312,y1:190,x2:372,y2:190,stroke:'var(--text2)','stroke-width':1.5,'marker-end':'url(#arrow)'});
+lab('u',K('u'),310,293);lab('v',K('v'),60,92);lab('x',K('x'),650,293);lab('y',K('y'),400,40);
+lab('T',K('T'),342,176);
+lab('tu','uv 平面（E）',50,66,'translate(0,-50%)');
+lab('tx','xy 平面（D）',400,16,'translate(0,-50%)');
+lab('t0',K('0'),50,304);lab('t3',K('3'),290,304);lab('tp',K('\\pi/2'),28,170);
+document.getElementById('n1').innerHTML=K('u_0');
+document.getElementById('n2').innerHTML=K('v_0');
+document.getElementById('n3').innerHTML=K('\\Delta u');
+document.getElementById('n4').innerHTML=K('\\Delta v');
+document.getElementById('k1').innerHTML='面積(δ′)　正確な値';
+document.getElementById('k2').innerHTML=K('|x_uy_v-x_vy_u|\\,\\Delta u\\,\\Delta v');
+document.getElementById('k3').innerHTML='相対誤差';
+document.getElementById('fm').innerHTML=K('x_u=\\cos v,\\ x_v=-u\\sin v,\\ y_u=\\sin v,\\ y_v=u\\cos v\\ \\Rightarrow\\ x_uy_v-x_vy_u=u');
+const U0=document.getElementById('U0'),V0=document.getElementById('V0'),DU=document.getElementById('DU'),DV=document.getElementById('DV');
+function draw(){
+  dyn.innerHTML='';
+  const u0=+U0.value,v0=+V0.value;
+  const du=Math.min(+DU.value,3-u0),dv=Math.min(+DV.value,HP-v0);
+  const u1=u0+du,v1=v0+dv;
+  document.getElementById('o1').textContent=u0.toFixed(2);
+  document.getElementById('o2').textContent=v0.toFixed(2);
+  document.getElementById('o3').textContent=du.toFixed(2);
+  document.getElementById('o4').textContent=dv.toFixed(2);
+  const a=SU(u0,v0),b=SU(u1,v1);
+  el(dyn,'rect',{x:a[0],y:b[1],width:b[0]-a[0],height:a[1]-b[1],fill:'#7F77DD','fill-opacity':0.4,stroke:'#534AB7','stroke-width':1.5});
+  const n=24,pts=[];
+  for(let i=0;i<=n;i++)pts.push(SX(...P(u0+du*i/n,v0)));
+  for(let i=0;i<=n;i++)pts.push(SX(...P(u1,v0+dv*i/n)));
+  for(let i=0;i<=n;i++)pts.push(SX(...P(u1-du*i/n,v1)));
+  for(let i=0;i<=n;i++)pts.push(SX(...P(u0,v1-dv*i/n)));
+  el(dyn,'polygon',{points:pl(pts),fill:'#1D9E75','fill-opacity':0.4,stroke:'#0F6E56','stroke-width':1.5});
+  const p0=P(u0,v0);
+  const A=[p0[0]+Math.cos(v0)*du,p0[1]+Math.sin(v0)*du];
+  const B=[p0[0]-u0*Math.sin(v0)*dv,p0[1]+u0*Math.cos(v0)*dv];
+  const C=[A[0]+B[0]-p0[0],A[1]+B[1]-p0[1]];
+  el(dyn,'polygon',{points:pl([SX(...p0),SX(...A),SX(...C),SX(...B)]),fill:'none',stroke:'#888780','stroke-width':1,'stroke-dasharray':'5 4'});
+  const s0=SX(...p0),sA=SX(...A),sB=SX(...B);
+  el(dyn,'line',{x1:s0[0],y1:s0[1],x2:sA[0],y2:sA[1],stroke:'#D85A30','stroke-width':2.5,'marker-end':'url(#arrow)'});
+  el(dyn,'line',{x1:s0[0],y1:s0[1],x2:sB[0],y2:sB[1],stroke:'#378ADD','stroke-width':2.5,'marker-end':'url(#arrow)'});
+  const cu=SU(u0+du/2,v0+dv/2),cx=SX(...P(u0+du/2,v0+dv/2));
+  lab('d',K('\\delta'),cu[0],cu[1]);
+  lab('dp',K("\\delta'"),cx[0],cx[1]);
+  lab('la',K('(x_u,y_u)\\Delta u'),sA[0]+6,sA[1]+14,'translate(0,-50%)');
+  lab('lb',K('(x_v,y_v)\\Delta v'),sB[0]-6,sB[1]-10,'translate(-100%,-50%)');
+  const exact=(u0*du+du*du/2)*dv,approx=u0*du*dv,err=du/(2*u0+du);
+  document.getElementById('c1').textContent=exact.toFixed(4);
+  document.getElementById('c2').textContent=approx.toFixed(4);
+  document.getElementById('c3').textContent=(err*100).toFixed(1)+' %';
+}
+['U0','V0','DU','DV'].forEach(id=>document.getElementById(id).addEventListener('input',draw));
+draw();
+</script>
+</body>
+</html>
